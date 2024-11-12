@@ -1,0 +1,52 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Search {
+  id        String    @id @default(uuid())
+  queries   Query[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model Query {
+  id              String          @id @default(uuid())
+  searchString    String
+  refinedSearches RefinedSearch[]
+  sources         Source[]
+  answer          String
+  search          Search          @relation(fields: [searchId], references: [id])
+  searchId        String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+}
+
+model RefinedSearch {
+  id           String    @id @default(uuid())
+  searchString String
+  query        Query     @relation(fields: [queryId], references: [id])
+  queryId      String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+}
+
+model Source {
+  id        String    @id @default(uuid())
+  url       String
+  query     Query     @relation(fields: [queryId], references: [id])
+  queryId   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
