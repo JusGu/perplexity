@@ -7,10 +7,15 @@ export class OpenAIClient {
     this.client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY is not set in environment variables');
+    } else {
+      console.log('OPENAI_API_KEY is configured:', process.env.OPENAI_API_KEY.slice(0, 5) + '...');
+    }
   }
 
   async generateQueries(searchString: string): Promise<string[]> {
-    console.log('OpenAI: Generating queries for:', searchString);
+    console.log('🤖 OpenAI: Generating queries for:', searchString);
     try {
       const response = await this.client.chat.completions.create({
         model: "gpt-4",
@@ -27,22 +32,26 @@ export class OpenAIClient {
         temperature: 0.7,
       });
 
-      console.log('OpenAI response:', response.choices[0].message.content);
+      const content = response.choices[0].message.content || '[]';
+      console.log('✅ OpenAI raw response:', content);
+      
       try {
-        const content = response.choices[0].message.content || '[]';
         const queries = JSON.parse(content);
         if (Array.isArray(queries) && queries.length === 3) {
+          console.log('✅ OpenAI parsed queries:', queries);
           return queries;
         }
-        // Fallback if response isn't in expected format
+        console.warn('⚠️ OpenAI response not in expected format, using fallback');
         return [searchString];
       } catch (parseError) {
-        console.error('Failed to parse OpenAI response:', parseError);
+        console.error('❌ Failed to parse OpenAI response:', { content, error: parseError.message });
         return [searchString];
       }
     } catch (error) {
-      console.error('OpenAI error:', error);
-      // Fallback to original search string if OpenAI fails
+      console.error('❌ OpenAI error:', {
+        message: error.message,
+        searchString
+      });
       return [searchString];
     }
   }

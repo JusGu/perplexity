@@ -3,9 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+interface StreamUpdate {
+  type: string;
+  data?: any;
+  message?: string;
+}
+
 export default function SearchForm() {
   const [isLoading, setIsLoading] = useState(false);
-  const [streamingData, setStreamingData] = useState<any[]>([]);
+  const [streamingData, setStreamingData] = useState<StreamUpdate[]>([]);
   const router = useRouter();
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -48,13 +54,13 @@ export default function SearchForm() {
           .filter(Boolean)
           .map(line => {
             try {
-              return JSON.parse(line);
+              return JSON.parse(line) as StreamUpdate;
             } catch (e) {
               console.error('Failed to parse line:', line, e);
               return null;
             }
           })
-          .filter(Boolean);
+          .filter((update): update is StreamUpdate => update !== null);
 
         console.log('Processed updates:', updates);
 
@@ -69,8 +75,9 @@ export default function SearchForm() {
         }
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       console.error('Search error:', error);
-      setStreamingData(prev => [...prev, { type: 'error', message: error.message }]);
+      setStreamingData(prev => [...prev, { type: 'error', message: errorMessage }]);
     } finally {
       setIsLoading(false);
     }

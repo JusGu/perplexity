@@ -15,22 +15,33 @@ export async function POST(req: NextRequest) {
     const processor = new SearchProcessor();
     
     (async () => {
+      let isClosed = false;
       try {
         for await (const update of processor.processSearch(searchString)) {
+          if (isClosed) break;
           console.log('Search API: Streaming update:', update);
           const data = JSON.stringify(update) + '\n';
           await writer.write(encoder.encode(data));
         }
       } catch (error: any) {
-        console.error('Search API: Error during processing:', error);
-        const errorMessage = JSON.stringify({ 
-          type: 'error', 
-          message: error?.message || 'An error occurred'
-        }) + '\n';
-        await writer.write(encoder.encode(errorMessage));
+        if (!isClosed) {
+          console.error('Search API: Error during processing:', error);
+          const errorMessage = JSON.stringify({ 
+            type: 'error', 
+            message: error?.message || 'An error occurred'
+          }) + '\n';
+          await writer.write(encoder.encode(errorMessage));
+        }
       } finally {
-        console.log('Search API: Closing stream');
-        await writer.close();
+        if (!isClosed) {
+          console.log('Search API: Closing stream');
+          isClosed = true;
+          try {
+            await writer.close();
+          } catch (error) {
+            console.log('Stream already closed');
+          }
+        }
       }
     })();
 

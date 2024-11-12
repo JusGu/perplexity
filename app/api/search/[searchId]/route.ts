@@ -1,5 +1,31 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { searchId: string } }
+) {
+  try {
+    const search = await prisma.search.findUnique({
+      where: { id: params.searchId },
+      include: {
+        queries: true
+      }
+    });
+    
+    if (!search) {
+      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(search);
+  } catch (error) {
+    console.error('Error fetching search:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch search' }, 
+      { status: 500 }
+    );
+  }
+}
 
 export async function DELETE(
   req: Request,

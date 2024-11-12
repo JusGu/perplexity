@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 
+// Only use this function in server components or API routes
 export async function getSearch(searchId: string) {
   try {
     const search = await prisma.search.findUnique({
@@ -14,4 +15,4 @@ export async function getSearch(searchId: string) {
     console.error('Error fetching search:', error);
     return null;
   }
-} 
+}
