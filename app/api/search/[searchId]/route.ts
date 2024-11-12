@@ -18,4 +18,35 @@ export async function DELETE(
       { status: 500 }
     );
   }
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: { searchId: string } }
+) {
+  try {
+    const { searchString } = await req.json();
+    const search = await prisma.search.findUnique({
+      where: { id: params.searchId },
+      include: { queries: true },
+    });
+
+    if (!search) {
+      return NextResponse.json({ error: "Search not found" }, { status: 404 });
+    }
+
+    // Update the first query's searchString
+    await prisma.query.update({
+      where: { id: search.queries[0].id },
+      data: { searchString },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error updating search:", error);
+    return NextResponse.json(
+      { error: "Failed to update search" },
+      { status: 500 }
+    );
+  }
 } 
