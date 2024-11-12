@@ -1,56 +1,36 @@
-'use client';
+import { prisma } from "@/lib/prisma";
+import SearchSidebar from "@/components/SearchSidebar";
+import SearchForm from "@/components/SearchForm";
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-
-export default function Home() {
-  const router = useRouter();
-  const [searchInput, setSearchInput] = useState('');
-
-  const handleSearch = async (searchString: string) => {
-    if (!searchString.trim()) return;
-    
-    try {
-      const response = await fetch('/api/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+async function getSearches() {
+  const searches = await prisma.search.findMany({
+    where: {
+      deletedAt: null,
+    },
+    include: {
+      queries: {
+        select: {
+          searchString: true,
         },
-        body: JSON.stringify({ searchString }),
-      });
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+  return searches;
+}
 
-      const data = await response.json();
-      if (data.searchId) {
-        router.push(`/${data.searchId}`);
-      }
-    } catch (error) {
-      console.error('Error creating search:', error);
-    }
-  };
+export default async function Home() {
+  const searches = await getSearches();
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold mb-8">What do you want to know?</h1>
-      <div className="w-full max-w-xl flex gap-2">
-        <input
-          type="text"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Ask me anything..."
-          className="w-full p-4 rounded-lg border border-gray-300 bg-black text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleSearch(searchInput);
-            }
-          }}
-        />
-        <button
-          onClick={() => handleSearch(searchInput)}
-          className="px-6 py-4 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors"
-        >
-          Search
-        </button>
-      </div>
-    </main>
+    <>
+      <SearchSidebar searches={searches} />
+      <main className="flex min-h-screen flex-col items-center justify-center p-24">
+        <h1 className="text-4xl font-bold mb-8">What do you want to know?</h1>
+        <SearchForm />
+      </main>
+    </>
   );
 }
