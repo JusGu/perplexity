@@ -1,29 +1,45 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { SearchProcessor } from '@/lib/processors/search';
+import { NextRequest } from 'next/server';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const { searchString } = await req.json();
 
-    const search = await prisma.search.create({
-      data: {
-        queries: {
-          create: {
-            searchString,
-            answer: "", // Empty answer for now
-          },
-        },
-      },
-      include: {
-        queries: true,
+    // Create response stream
+    const stream = new TransformStream();
+    const writer = stream.writable.getWriter();
+    const encoder = new TextEncoder();
+
+    // Process search in background
+    const processor = new SearchProcessor();
+    
+    (async () => {
+      try {
+        for await (const update of processor.processSearch(searchString)) {
+          const data = JSON.stringify(update) + '\n';
+          await writer.write(encoder.encode(data));
+        }
+      } catch (error: any) {
+        const errorMessage = JSON.stringify({ 
+          type: 'error', 
+          message: error?.message || 'An error occurred'
+        }) + '\n';
+        await writer.write(encoder.encode(errorMessage));
+      } finally {
+        await writer.close();
+      }
+    })();
+
+    return new Response(stream.readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
       },
     });
-
-    return NextResponse.json({ searchId: search.id });
-  } catch (error) {
-    console.error("Error creating search:", error);
-    return NextResponse.json(
-      { error: "Failed to create search" },
+  } catch (error: any) {
+    return new Response(
+      JSON.stringify({ error: error?.message || 'An error occurred' }), 
       { status: 500 }
     );
   }

@@ -1,9 +1,11 @@
 -- CreateTable
 CREATE TABLE "Search" (
     "id" TEXT NOT NULL PRIMARY KEY,
+    "query" TEXT NOT NULL DEFAULT '',
+    "refinedQueries" TEXT NOT NULL DEFAULT '[]',
+    "summary" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "deletedAt" DATETIME
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
