@@ -50,3 +50,7 @@
     @apply bg-background text-foreground;
   }
 }
+
+nextjs-portal {
+  display: none;
+}
