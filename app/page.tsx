@@ -4,25 +4,20 @@ import { Search } from "lucide-react"
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 max-w-3xl mx-auto">
-      <h1 className="text-4xl md:text-5xl font-bold text-center mb-8 tracking-tight text-white">
+    <main className="flex min-h-screen flex-col items-center justify-center">
+      <h1 className="text-3xl font-bold mb-4">
         What do you want to know?
       </h1>
       
-      <div className="w-full flex gap-2">
-        <div className="relative flex-1">
+      <div className="flex gap-3">
+        <div className="relative">
           <Input 
             placeholder="Ask me anything..." 
-            className="w-full pl-4 pr-10 py-6 text-lg rounded-xl bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-400 focus-visible:ring-zinc-600"
+            className="w-[400px] h-12 text-lg"
           />
-          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-400 h-5 w-5" />
+          <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-6 w-6" />
         </div>
-        <Button 
-          className="px-6 py-6 text-lg rounded-xl bg-white hover:bg-zinc-100 text-black"
-          size="lg"
-        >
-          Ask
-        </Button>
+        <Button className="h-12 px-6 text-lg">Ask</Button>
       </div>
     </main>
   )
