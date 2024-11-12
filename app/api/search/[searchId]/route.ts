@@ -6,8 +6,9 @@ export async function GET(
   { params }: { params: { searchId: string } }
 ) {
   try {
+    const searchId = await params.searchId;
     const search = await prisma.search.findUnique({
-      where: { id: params.searchId },
+      where: { id: searchId },
       include: {
         queries: true
       }
