@@ -1,24 +1,56 @@
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Search } from "lucide-react"
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 export default function Home() {
+  const router = useRouter();
+  const [searchInput, setSearchInput] = useState('');
+
+  const handleSearch = async (searchString: string) => {
+    if (!searchString.trim()) return;
+    
+    try {
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ searchString }),
+      });
+
+      const data = await response.json();
+      if (data.searchId) {
+        router.push(`/${data.searchId}`);
+      }
+    } catch (error) {
+      console.error('Error creating search:', error);
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center">
-      <h1 className="text-3xl font-bold mb-4">
-        What do you want to know?
-      </h1>
-      
-      <div className="flex gap-3">
-        <div className="relative">
-          <Input 
-            placeholder="Ask me anything..." 
-            className="w-[400px] h-12 text-lg"
-          />
-          <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-6 w-6" />
-        </div>
-        <Button className="h-12 px-6 text-lg">Ask</Button>
+    <main className="flex min-h-screen flex-col items-center justify-center p-24">
+      <h1 className="text-4xl font-bold mb-8">What do you want to know?</h1>
+      <div className="w-full max-w-xl flex gap-2">
+        <input
+          type="text"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Ask me anything..."
+          className="w-full p-4 rounded-lg border border-gray-300 bg-black text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleSearch(searchInput);
+            }
+          }}
+        />
+        <button
+          onClick={() => handleSearch(searchInput)}
+          className="px-6 py-4 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          Search
+        </button>
       </div>
     </main>
-  )
+  );
 }
