@@ -1,61 +1,60 @@
-import { SearchProcessor } from '@/lib/processors/search';
 import { NextRequest } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { processSearch } from '@/lib/processors/search';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const { searchString } = await req.json();
-    console.log('Search API: Received request for:', searchString);
+    const { query } = await request.json();
 
-    // Create response stream
-    const stream = new TransformStream();
-    const writer = stream.writable.getWriter();
-    const encoder = new TextEncoder();
-
-    // Process search in background
-    const processor = new SearchProcessor();
-    
-    (async () => {
-      let isClosed = false;
-      try {
-        for await (const update of processor.processSearch(searchString)) {
-          if (isClosed) break;
-          console.log('Search API: Streaming update:', update);
-          const data = JSON.stringify(update) + '\n';
-          await writer.write(encoder.encode(data));
-        }
-      } catch (error: any) {
-        if (!isClosed) {
-          console.error('Search API: Error during processing:', error);
-          const errorMessage = JSON.stringify({ 
-            type: 'error', 
-            message: error?.message || 'An error occurred'
-          }) + '\n';
-          await writer.write(encoder.encode(errorMessage));
-        }
-      } finally {
-        if (!isClosed) {
-          console.log('Search API: Closing stream');
-          isClosed = true;
-          try {
-            await writer.close();
-          } catch (error) {
-            console.log('Stream already closed');
-          }
-        }
+    // Create search record
+    const search = await prisma.search.create({
+      data: {
+        query,
+        refinedQueries: JSON.stringify([
+          `History of ${query}`,
+          `Key factors in ${query}`,
+          `Analysis of ${query}`
+        ])
       }
-    })();
-
-    return new Response(stream.readable, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
     });
-  } catch (error: any) {
+
+    return Response.json({ searchId: search.id });
+  } catch (error) {
     console.error('Search API: Error handling request:', error);
-    return new Response(
-      JSON.stringify({ error: error?.message || 'An error occurred' }), 
+    return Response.json(
+      { error: 'Failed to process search' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const searchId = request.nextUrl.searchParams.get('searchId');
+    if (!searchId) {
+      return Response.json(
+        { error: 'Search ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const search = await prisma.search.findUnique({
+      where: { id: searchId },
+      include: { queries: true }
+    });
+
+    if (!search) {
+      return Response.json(
+        { error: 'Search not found' },
+        { status: 404 }
+      );
+    }
+
+    return Response.json(search);
+  } catch (error) {
+    console.error('Search API: Error fetching search:', error);
+    return Response.json(
+      { error: 'Failed to fetch search' },
       { status: 500 }
     );
   }

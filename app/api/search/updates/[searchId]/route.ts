@@ -1,20 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Search } from '@prisma/client';
-
-interface SearchCallbacks {
-  onStatus: (message: string) => void;
-  onSearchResult: (data: any) => void;
-  onSummary: (content: string) => void;
-  onComplete: () => void;
-}
-
-async function processSearch(search: Search, callbacks: SearchCallbacks) {
-  // Your search processing logic here
-  // This is a placeholder - you'll need to implement the actual search processing
-  callbacks.onStatus('Starting search...');
-  // ... rest of the implementation
-}
+import { processSearch } from '@/lib/processors/search';
 
 export async function GET(
   request: NextRequest,
@@ -30,12 +16,17 @@ export async function GET(
         // Get the search
         const search = await prisma.search.findUnique({
           where: { id: searchId },
+          include: { queries: true }
         });
 
         if (!search) {
           controller.close();
           return;
         }
+
+        // Send initial status
+        const initialUpdate = { type: 'status', message: 'Starting search...' };
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(initialUpdate)}\n\n`));
 
         // Process search and stream updates
         await processSearch(search, {
@@ -59,6 +50,8 @@ export async function GET(
         });
       } catch (error) {
         console.error('Error in SSE stream:', error);
+        const errorUpdate = { type: 'status', message: 'Error processing search' };
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorUpdate)}\n\n`));
         controller.close();
       }
     },

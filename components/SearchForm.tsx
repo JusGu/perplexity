@@ -2,25 +2,18 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-interface StreamUpdate {
-  type: string;
-  data?: any;
-  message?: string;
-}
+import { Search } from 'lucide-react';
 
 export default function SearchForm() {
+  const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [streamingData, setStreamingData] = useState<StreamUpdate[]>([]);
   const router = useRouter();
 
-  const handleSearch = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    const searchString = formData.get('search') as string;
+    if (!query.trim()) return;
 
     setIsLoading(true);
-    setStreamingData([]);
 
     try {
       const response = await fetch('/api/search', {
@@ -28,87 +21,47 @@ export default function SearchForm() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ searchString }),
+        body: JSON.stringify({ query: query.trim() }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error('Search request failed');
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No reader available');
-      }
-
-      let redirected = false;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        // Parse the chunks
-        const chunk = new TextDecoder().decode(value);
-        console.log('Received chunk:', chunk);
-
-        const updates = chunk
-          .split('\n')
-          .filter(Boolean)
-          .map(line => {
-            try {
-              return JSON.parse(line) as StreamUpdate;
-            } catch (e) {
-              console.error('Failed to parse line:', line, e);
-              return null;
-            }
-          })
-          .filter((update): update is StreamUpdate => update !== null);
-
-        console.log('Processed updates:', updates);
-
-        // Handle updates
-        for (const update of updates) {
-          setStreamingData(prev => [...prev, update]);
-          
-          if (update.type === 'searchId' && !redirected) {
-            redirected = true;
-            router.push(`/${update.data}`);
-          }
-        }
-      }
+      const data = await response.json();
+      
+      // Redirect to the search page
+      router.push(`/${data.searchId}`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       console.error('Search error:', error);
-      setStreamingData(prev => [...prev, { type: 'error', message: errorMessage }]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="p-4">
-      <form onSubmit={handleSearch} className="mb-4">
+    <form onSubmit={handleSubmit} className="w-full max-w-2xl">
+      <div className="relative flex items-center">
         <input
           type="text"
-          name="search"
-          placeholder="Enter your search..."
-          className="border p-2 mr-2 w-96 bg-black text-white placeholder-gray-400 rounded-md"
-        />
-        <button 
-          type="submit"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Ask any question..."
+          className="w-full px-4 py-2 text-gray-200 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-gray-600"
           disabled={isLoading}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
+        />
+        <button
+          type="submit"
+          className="absolute right-2 p-2 text-gray-400 hover:text-gray-200"
+          disabled={isLoading}
         >
-          {isLoading ? 'Searching...' : 'Search'}
+          {isLoading ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-400" />
+          ) : (
+            <Search className="w-5 h-5" />
+          )}
         </button>
-      </form>
-
-      {/* Debug output */}
-      <div className="mt-4 text-sm text-gray-500">
-        {streamingData.map((data, index) => (
-          <div key={index} className="mb-1">
-            {JSON.stringify(data)}
-          </div>
-        ))}
       </div>
-    </div>
+    </form>
   );
 } 

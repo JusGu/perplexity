@@ -6,9 +6,8 @@ import { Search as SearchIcon } from 'lucide-react';
 
 // Configure marked options
 marked.setOptions({
-  gfm: true, // GitHub Flavored Markdown
-  breaks: true, // Convert \n to <br>
-  mangle: false, // Don't escape HTML
+  gfm: true,
+  breaks: true
 });
 
 function LoadingState() {
@@ -56,43 +55,55 @@ export default function SearchContent({ searchId }: { searchId: string }) {
         if (mounted) {
           setSearch(initialData);
           setLoading(false);
+          
+          // Clear previous content when loading new search
+          setLiveContent('');
+          setUpdates([]);
         }
 
-        // Setup SSE connection
+        // Setup SSE connection with proper URL
         eventSource = new EventSource(`/api/search/updates/${searchId}`);
         
         eventSource.onmessage = (event) => {
           if (mounted) {
-            const update: SearchUpdate = JSON.parse(event.data);
-            setUpdates(prev => [...prev, update]);
+            try {
+              const update: SearchUpdate = JSON.parse(event.data);
+              console.log('Received update:', update); // Debug log
 
-            // Handle different update types
-            switch (update.type) {
-              case 'summary':
-                if (update.content) {
-                  setLiveContent(prev => prev + update.content);
-                }
-                break;
-              case 'complete':
-                // Fetch final data and close connection
-                fetchSearch(searchId).then(newData => {
-                  if (mounted) {
-                    setSearch(newData);
-                    if (eventSource) {
-                      eventSource.close();
-                    }
+              setUpdates(prev => [...prev, update]);
+
+              switch (update.type) {
+                case 'summary':
+                  if (update.content) {
+                    setLiveContent(prev => prev + update.content);
                   }
-                });
-                break;
+                  break;
+                case 'complete':
+                  fetchSearch(searchId).then(newData => {
+                    if (mounted) {
+                      setSearch(newData);
+                      if (eventSource) {
+                        eventSource.close();
+                      }
+                    }
+                  });
+                  break;
+              }
+            } catch (error) {
+              console.error('Error processing update:', error);
             }
           }
         };
 
         eventSource.onerror = (error) => {
           console.error('EventSource error:', error);
-          if (eventSource) {
-            eventSource.close();
+          if (eventSource?.readyState === EventSource.CLOSED) {
+            console.log('EventSource connection closed');
           }
+        };
+
+        eventSource.onopen = () => {
+          console.log('EventSource connection opened');
         };
       } catch (error) {
         console.error('Error loading search data:', error);
@@ -108,6 +119,7 @@ export default function SearchContent({ searchId }: { searchId: string }) {
     return () => {
       mounted = false;
       if (eventSource) {
+        console.log('Closing EventSource connection');
         eventSource.close();
       }
     };

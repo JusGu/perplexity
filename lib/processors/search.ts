@@ -1,82 +1,64 @@
-import { OpenAIClient } from '../clients/openai';
-import { SerpAPIClient } from '../clients/serpapi';
-import { prisma } from '../prisma';
-import { searchUpdatesStore } from '../store';
+import { Search } from '@prisma/client';
+import { openai } from '../clients/openai';
+import { serpapi } from '../clients/serpapi';
 
-export class SearchProcessor {
-  private openai: OpenAIClient;
-  private serpapi: SerpAPIClient;
-  private searchId: string | null = null;
-  
-  constructor() {
-    this.openai = new OpenAIClient();
-    this.serpapi = new SerpAPIClient();
-  }
+interface SearchCallbacks {
+  onStatus: (message: string) => void;
+  onSearchResult: (data: any) => void;
+  onSummary: (content: string) => void;
+  onComplete: () => void;
+}
 
-  async *processSearch(searchString: string) {
-    console.log('🔄 Starting search process for:', searchString);
+export async function processSearch(search: Search, callbacks: SearchCallbacks) {
+  try {
+    callbacks.onStatus('Searching the web...');
     
-    // Create search record immediately
-    const search = await prisma.search.create({
-      data: {
-        query: searchString,
-        refinedQueries: '[]',
-      }
-    });
-    this.searchId = search.id;
-    
-    const publishUpdate = (update: any) => {
-      if (this.searchId) {
-        searchUpdatesStore.publish(this.searchId, update);
-      }
-      return update;
-    };
-    
-    yield publishUpdate({ type: 'searchId', data: this.searchId });
-    
+    // Perform web search
+    let searchResults;
     try {
-      // Step 1: Generate refined queries
-      yield publishUpdate({ type: 'status', message: 'Generating search queries...' });
-      const queries = await this.openai.generateQueries(searchString);
-      
-      await prisma.search.update({
-        where: { id: this.searchId },
-        data: { refinedQueries: JSON.stringify(queries) }
-      });
-      
-      yield publishUpdate({ type: 'queries', data: queries });
-
-      // Step 2: Search using SerpAPI
-      yield publishUpdate({ type: 'status', message: 'Searching...' });
-      const searchResults = [];
-      
-      for (const query of queries) {
-        const result = await this.serpapi.search(query);
-        searchResults.push(result);
-        yield publishUpdate({ type: 'searchResult', data: result });
-      }
-
-      // Step 3: Generate summary
-      yield publishUpdate({ type: 'status', message: 'Generating summary...' });
-      const summaryStream = await this.openai.generateSummary(searchResults);
-      
-      let fullSummary = '';
-      for await (const chunk of summaryStream) {
-        const content = chunk.choices[0]?.delta?.content || '';
-        fullSummary += content;
-        yield publishUpdate({ type: 'summary', data: content });
-      }
-
-      await prisma.search.update({
-        where: { id: this.searchId },
-        data: { summary: fullSummary }
-      });
-      
-      yield publishUpdate({ type: 'complete', data: { summary: fullSummary } });
+      searchResults = await serpapi.search(search.query);
+      callbacks.onSearchResult(searchResults);
     } catch (error) {
-      console.error('❌ Error in search process:', error);
-      yield publishUpdate({ type: 'error', message: error instanceof Error ? error.message : 'An unknown error occurred' });
+      console.error('SerpAPI search error:', error);
+      callbacks.onStatus('Error fetching search results');
       throw error;
     }
+
+    callbacks.onStatus('Generating summary...');
+    
+    try {
+      // Stream the summary generation
+      const stream = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant that summarizes search results.'
+          },
+          {
+            role: 'user',
+            content: `Summarize these search results about "${search.query}": ${JSON.stringify(searchResults)}`
+          }
+        ],
+        stream: true,
+      });
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          callbacks.onSummary(content);
+        }
+      }
+    } catch (error) {
+      console.error('OpenAI streaming error:', error);
+      callbacks.onStatus('Error generating summary');
+      throw error;
+    }
+
+    callbacks.onComplete();
+  } catch (error) {
+    console.error('Error in processSearch:', error);
+    callbacks.onStatus('Search process failed');
+    throw error;
   }
 } 
