@@ -9,6 +9,30 @@ interface SearchCallbacks {
   onComplete: () => void;
 }
 
+function trimSearchResults(results: any) {
+  // Take only essential fields from organic results
+  const trimmedResults = {
+    organic_results: (results.organic_results || []).slice(0, 5).map((result: any) => ({
+      title: result.title,
+      snippet: result.snippet,
+      link: result.link
+    })),
+    answer_box: results.answer_box ? {
+      title: results.answer_box.title,
+      answer: results.answer_box.answer,
+      snippet: results.answer_box.snippet
+    } : null,
+    knowledge_graph: results.knowledge_graph ? {
+      title: results.knowledge_graph.title,
+      description: results.knowledge_graph.description,
+      type: results.knowledge_graph.type
+    } : null,
+    related_questions: (results.related_questions || []).slice(0, 3)
+  };
+
+  return trimmedResults;
+}
+
 export async function processSearch(search: Search, callbacks: SearchCallbacks) {
   try {
     callbacks.onStatus('Searching the web...');
@@ -27,20 +51,25 @@ export async function processSearch(search: Search, callbacks: SearchCallbacks) 
     callbacks.onStatus('Generating summary...');
     
     try {
-      // Stream the summary generation
+      // Trim search results to reduce token count
+      const trimmedResults = trimSearchResults(searchResults);
+
+      // Stream the summary generation using GPT-4 Turbo
       const stream = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4-1106-preview', // GPT-4 Turbo with 128k context
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful assistant that summarizes search results.'
+            content: 'You are a helpful assistant that summarizes search results. Provide a clear, concise summary with relevant details and insights.'
           },
           {
             role: 'user',
-            content: `Summarize these search results about "${search.query}": ${JSON.stringify(searchResults)}`
+            content: `Summarize these search results about "${search.query}": ${JSON.stringify(trimmedResults)}`
           }
         ],
         stream: true,
+        temperature: 0.7,
+        max_tokens: 1000 // Limit response length
       });
 
       for await (const chunk of stream) {
