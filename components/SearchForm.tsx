@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function SearchForm() {
-  const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [searchId, setSearchId] = useState<string | null>(null);
+  const [streamingData, setStreamingData] = useState<any[]>([]);
+  const router = useRouter();
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -13,8 +14,7 @@ export default function SearchForm() {
     const searchString = formData.get('search') as string;
 
     setIsLoading(true);
-    setResults([]);
-    setSearchId(null);
+    setStreamingData([]);
 
     try {
       const response = await fetch('/api/search', {
@@ -25,30 +25,52 @@ export default function SearchForm() {
         body: JSON.stringify({ searchString }),
       });
 
-      const reader = response.body?.getReader();
-      if (!reader) return;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No reader available');
+      }
+
+      let redirected = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         // Parse the chunks
         const chunk = new TextDecoder().decode(value);
-        const updates = chunk.split('\n')
+        console.log('Received chunk:', chunk);
+
+        const updates = chunk
+          .split('\n')
           .filter(Boolean)
-          .map((line) => JSON.parse(line));
+          .map(line => {
+            try {
+              return JSON.parse(line);
+            } catch (e) {
+              console.error('Failed to parse line:', line, e);
+              return null;
+            }
+          })
+          .filter(Boolean);
 
-        // Handle search ID
-        updates.forEach(update => {
-          if (update.type === 'searchId') {
-            setSearchId(update.data);
+        console.log('Processed updates:', updates);
+
+        // Handle updates
+        for (const update of updates) {
+          setStreamingData(prev => [...prev, update]);
+          
+          if (update.type === 'searchId' && !redirected) {
+            redirected = true;
+            router.push(`/${update.data}`);
           }
-        });
-
-        setResults(prev => [...prev, ...updates]);
+        }
       }
     } catch (error) {
       console.error('Search error:', error);
+      setStreamingData(prev => [...prev, { type: 'error', message: error.message }]);
     } finally {
       setIsLoading(false);
     }
@@ -72,30 +94,11 @@ export default function SearchForm() {
         </button>
       </form>
 
-      <div className="results">
-        {searchId && (
-          <p className="text-sm text-gray-500 mb-2">
-            Search ID: {searchId}
-          </p>
-        )}
-        {results.map((result, index) => (
-          <div key={index} className="mb-2">
-            {result.type === 'status' && (
-              <p className="text-gray-600">{result.message}</p>
-            )}
-            {result.type === 'queries' && (
-              <div className="bg-gray-100 p-2 rounded">
-                <h3>Generated Queries:</h3>
-                <ul>
-                  {result.data.map((query: string, i: number) => (
-                    <li key={i}>{query}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {result.type === 'summary' && (
-              <div className="prose" dangerouslySetInnerHTML={{ __html: result.data }} />
-            )}
+      {/* Debug output */}
+      <div className="mt-4 text-sm text-gray-500">
+        {streamingData.map((data, index) => (
+          <div key={index} className="mb-1">
+            {JSON.stringify(data)}
           </div>
         ))}
       </div>

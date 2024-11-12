@@ -27,16 +27,30 @@ async function SearchContent({ searchId }: { searchId: string }) {
 }
 
 // Main page component
-export default function SearchPage({
+export default async function SearchPage({
   params,
 }: {
   params: { searchId: string };
 }) {
+  // Make the component async
   return (
     <div className="container mx-auto p-4">
       <Suspense fallback={<LoadingState />}>
+        {/* No need to await params.searchId since the component is async */}
         <SearchContent searchId={params.searchId} />
       </Suspense>
     </div>
   );
+}
+
+// Add generateMetadata for better SEO
+export async function generateMetadata({
+  params,
+}: {
+  params: { searchId: string };
+}) {
+  const search = await getSearch(params.searchId);
+  return {
+    title: search ? `Search Results for: ${search.query}` : 'Search Results',
+  };
 } 
