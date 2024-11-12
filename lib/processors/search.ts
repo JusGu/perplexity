@@ -60,11 +60,19 @@ export async function processSearch(search: Search, callbacks: SearchCallbacks) 
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful assistant that summarizes search results. Provide a clear, concise summary with relevant details and insights.'
+            content: `You are a helpful assistant that summarizes search results. 
+            Provide a clear, concise summary with relevant details and insights.
+            Important: Include inline citations by linking to sources using markdown links.
+            Format: When citing information, use this style: [relevant text](URL).
+            Example: [Apple's revenue grew by 5% in 2023](https://example.com/source).
+            Make sure to weave the citations naturally into the text while maintaining readability.`
           },
           {
             role: 'user',
-            content: `Summarize these search results about "${search.query}": ${JSON.stringify(trimmedResults)}`
+            content: `Summarize these search results about "${search.query}". 
+            Include relevant inline citations using markdown links to the source URLs.
+            Make the summary informative and well-structured, with proper attribution to sources: 
+            ${JSON.stringify(trimmedResults)}`
           }
         ],
         stream: true,

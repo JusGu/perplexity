@@ -7,12 +7,16 @@ export async function GET(
   { params }: { params: { searchId: string } }
 ) {
   const searchId = params.searchId;
-
-  // Set up SSE headers
   const encoder = new TextEncoder();
+
   const customReadable = new ReadableStream({
     async start(controller) {
       try {
+        // Validate searchId
+        if (!searchId) {
+          throw new Error('Search ID is required');
+        }
+
         // Get the search
         const search = await prisma.search.findUnique({
           where: { id: searchId },
@@ -20,25 +24,28 @@ export async function GET(
         });
 
         if (!search) {
+          const error = { type: 'error', message: 'Search not found' };
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(error)}\n\n`));
           controller.close();
           return;
         }
 
         // Send initial status
-        const initialUpdate = { type: 'status', message: 'Starting search...' };
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(initialUpdate)}\n\n`));
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'status', message: 'Starting search...' })}\n\n`)
+        );
 
-        // Process search and stream updates
+        // Process search with error handling
         await processSearch(search, {
-          onStatus: (message: string) => {
+          onStatus: (message) => {
             const update = { type: 'status', message };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(update)}\n\n`));
           },
-          onSearchResult: (data: any) => {
+          onSearchResult: (data) => {
             const update = { type: 'searchResult', data };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(update)}\n\n`));
           },
-          onSummary: (content: string) => {
+          onSummary: (content) => {
             const update = { type: 'summary', content };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(update)}\n\n`));
           },
@@ -46,15 +53,22 @@ export async function GET(
             const update = { type: 'complete' };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(update)}\n\n`));
             controller.close();
-          },
+          }
         });
       } catch (error) {
         console.error('Error in SSE stream:', error);
-        const errorUpdate = { type: 'status', message: 'Error processing search' };
+        const errorUpdate = { 
+          type: 'error', 
+          message: error instanceof Error ? error.message : 'Error processing search'
+        };
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorUpdate)}\n\n`));
         controller.close();
       }
     },
+
+    cancel() {
+      console.log('Client closed the connection');
+    }
   });
 
   return new Response(customReadable, {

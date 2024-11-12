@@ -48,6 +48,8 @@ export default function SearchContent({ searchId }: { searchId: string }) {
   useEffect(() => {
     let mounted = true;
     let eventSource: EventSource | null = null;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
 
     async function loadData() {
       try {
@@ -55,55 +57,72 @@ export default function SearchContent({ searchId }: { searchId: string }) {
         if (mounted) {
           setSearch(initialData);
           setLoading(false);
-          
-          // Clear previous content when loading new search
           setLiveContent('');
           setUpdates([]);
         }
 
-        // Setup SSE connection with proper URL
+        // Setup SSE connection with proper URL and error handling
         eventSource = new EventSource(`/api/search/updates/${searchId}`);
         
         eventSource.onmessage = (event) => {
-          if (mounted) {
-            try {
-              const update: SearchUpdate = JSON.parse(event.data);
-              console.log('Received update:', update); // Debug log
+          if (!mounted) return;
+          
+          try {
+            const update: SearchUpdate = JSON.parse(event.data);
+            console.log('Received update:', update);
 
-              setUpdates(prev => [...prev, update]);
+            setUpdates(prev => [...prev, update]);
 
-              switch (update.type) {
-                case 'summary':
-                  if (update.content) {
-                    setLiveContent(prev => prev + update.content);
+            switch (update.type) {
+              case 'summary':
+                if (update.content) {
+                  setLiveContent(prev => prev + update.content);
+                }
+                break;
+              case 'complete':
+                fetchSearch(searchId).then(newData => {
+                  if (mounted) {
+                    setSearch(newData);
+                    eventSource?.close();
                   }
-                  break;
-                case 'complete':
-                  fetchSearch(searchId).then(newData => {
-                    if (mounted) {
-                      setSearch(newData);
-                      if (eventSource) {
-                        eventSource.close();
-                      }
-                    }
-                  });
-                  break;
-              }
-            } catch (error) {
-              console.error('Error processing update:', error);
+                });
+                break;
+              case 'error':
+                setError(update.message || 'An error occurred');
+                eventSource?.close();
+                break;
             }
+          } catch (error) {
+            console.error('Error processing update:', error);
           }
         };
 
-        eventSource.onerror = (error) => {
-          console.error('EventSource error:', error);
+        eventSource.onerror = (event) => {
+          // Basic error info that's always available
+          const errorInfo = {
+            type: 'EventSource Error',
+            readyState: eventSource?.readyState,
+            withCredentials: eventSource?.withCredentials,
+            url: eventSource?.url
+          };
+          
+          console.error('EventSource error:', errorInfo);
+
           if (eventSource?.readyState === EventSource.CLOSED) {
             console.log('EventSource connection closed');
+            if (retryCount < MAX_RETRIES) {
+              retryCount++;
+              console.log(`Retrying connection (${retryCount}/${MAX_RETRIES})...`);
+              setTimeout(loadData, 1000 * retryCount);
+            } else {
+              setError('Connection lost. Please refresh the page.');
+            }
           }
         };
 
         eventSource.onopen = () => {
           console.log('EventSource connection opened');
+          retryCount = 0; // Reset retry count on successful connection
         };
       } catch (error) {
         console.error('Error loading search data:', error);
