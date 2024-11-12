@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { marked } from 'marked';
-import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
+import { Search as SearchIcon } from 'lucide-react';
 
 // Configure marked options
 marked.setOptions({
   gfm: true, // GitHub Flavored Markdown
   breaks: true, // Convert \n to <br>
-  headerIds: true, // Add ids to headers
   mangle: false, // Don't escape HTML
-  headerPrefix: 'heading-', // Prefix for header ids
 });
 
 function LoadingState() {
@@ -147,7 +145,7 @@ export default function SearchContent({ searchId }: { searchId: string }) {
                   key={index}
                   className="bg-gray-800 text-gray-200 px-3 py-1 rounded-full text-sm flex items-center gap-1"
                 >
-                  <MagnifyingGlassIcon className="w-4 h-4" />
+                  <SearchIcon className="w-4 h-4" />
                   {query.trim().replace(/[\[\]"]/g, '')}
                 </div>
               ))}
