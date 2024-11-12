@@ -4,9 +4,6 @@ import SearchForm from "@/components/SearchForm";
 
 async function getSearches() {
   const searches = await prisma.search.findMany({
-    where: {
-      deletedAt: null,
-    },
     include: {
       queries: {
         select: {

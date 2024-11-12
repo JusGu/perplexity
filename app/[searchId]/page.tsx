@@ -1,29 +1,42 @@
-import { prisma } from "@/lib/prisma";
-import { notFound } from "next/navigation";
+import { getSearch } from '@/lib/api';
+import { Suspense } from 'react';
 
-async function getSearch(searchId: string) {
-  const search = await prisma.search.findUnique({
-    where: { id: searchId },
-    include: {
-      queries: true,
-    },
-  });
-
-  if (!search) notFound();
-  return search;
+// Add loading component
+function LoadingState() {
+  return <div>Loading search results...</div>;
 }
 
-export default async function SearchPage({
+// Separate search content component
+async function SearchContent({ searchId }: { searchId: string }) {
+  const search = await getSearch(searchId);
+  
+  if (!search) {
+    return <div>Search not found</div>;
+  }
+
+  return (
+    <div>
+      <h1>Search Results</h1>
+      <p>Query: {search.query}</p>
+      <p>Refined Queries: {search.refinedQueries}</p>
+      {search.summary && (
+        <div className="prose" dangerouslySetInnerHTML={{ __html: search.summary }} />
+      )}
+    </div>
+  );
+}
+
+// Main page component
+export default function SearchPage({
   params,
 }: {
   params: { searchId: string };
 }) {
-  const search = await getSearch(params.searchId);
-  const initialQuery = search.queries[0];
-
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold">{initialQuery.searchString}</h1>
+      <Suspense fallback={<LoadingState />}>
+        <SearchContent searchId={params.searchId} />
+      </Suspense>
     </div>
   );
 } 
